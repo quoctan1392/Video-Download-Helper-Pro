@@ -1,0 +1,24 @@
+{
+  "name": "video-download-helper-pro",
+  "version": "1.0.0",
+  "description": "Chrome extension for downloading videos with support for DASH, HLS, MPD, live streaming, and MP4 conversion",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"No tests specified\"",
+    "lint": "echo \"No linting configured\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "video-downloader",
+    "dash",
+    "hls",
+    "mpd",
+    "streaming",
+    "download-manager"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "mp4box": "^2.3.0"
+  }
+}

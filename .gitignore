@@ -1,0 +1,38 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Extension builds
+*.zip
+*.crx
+*.pem
+
+# Temporary files
+*.tmp
+*.log
+.cache/
+
+# User data
+*.db
+*.sqlite
+
+# Testing
+test-videos/
+test-downloads/
+
+# Environment
+.env
+.env.local

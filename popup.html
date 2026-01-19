@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Download Helper Pro</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+        </svg>
+        Video Download Helper
+      </h1>
+    </div>
+    
+    <div class="status" id="status">
+      <span class="status-icon">🔍</span>
+      <span id="statusText">Đang tìm kiếm video...</span>
+      <button id="errorInfoBtn" class="error-info-btn" style="display: none;" title="Xem chi tiết lỗi">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="video-list" id="videoList">
+      <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M23 7l-7 5 7 5V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+        <p>Không tìm thấy video nào</p>
+        <small>Phát video trên trang để phát hiện</small>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <button id="logBtn" class="btn btn-secondary" title="Xem log console">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polyline points="4 17 10 11 4 5"/>
+          <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        Log
+      </button>
+      <button id="refreshBtn" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Refresh
+      </button>
+      <button id="clearBtn" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        Clear
+      </button>
+    </div>
+  </div>
+  
+  <!-- Error Details Modal -->
+  <div id="errorModal" class="modal">
+    <div class="modal-content error-modal">
+      <div class="modal-header">
+        <h3>🚫 Chi tiết lỗi</h3>
+        <button class="modal-close" id="closeErrorModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="error-details" id="errorDetails">
+          <p>Không có thông tin lỗi</p>
+        </div>
+        <div class="error-suggestions" id="errorSuggestions">
+          <h4>💡 Gợi ý giải quyết:</h4>
+          <ul id="errorSuggestionsList"></ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="copyErrorBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Sao chép lỗi
+        </button>
+        <button class="btn btn-primary" id="closeErrorModalBtn">OK</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Log Console Modal -->
+  <div id="logModal" class="modal">
+    <div class="modal-content log-modal">
+      <div class="modal-header">
+        <h3>📋 Extension Log</h3>
+        <button class="modal-close" id="closeLogModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="log-toolbar">
+          <button id="clearLogBtn" class="btn btn-secondary btn-sm">🗑️ Xóa log</button>
+          <button id="copyLogBtn" class="btn btn-secondary btn-sm">📋 Copy</button>
+          <button id="refreshLogBtn" class="btn btn-secondary btn-sm">🔄 Làm mới</button>
+        </div>
+        <div id="logConsole" class="log-console"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- YT-DLP Modal -->
+  <div id="ytDlpModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🎬 Dùng yt-dlp để tải video</h3>
+        <button class="modal-close" id="closeYtDlpModal">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="ytdlp-info">
+          ⚠️ Video này có audio và video riêng biệt. Để đảm bảo âm thanh đồng bộ hoàn hảo, 
+          vui lòng dùng <strong>yt-dlp</strong> (công cụ download video tốt nhất).
+        </p>
+        
+        <div class="ytdlp-install">
+          <h4>📦 Cài đặt yt-dlp:</h4>
+          <div class="code-block">
+            <code>pip install yt-dlp</code>
+            <button class="copy-btn" data-copy="pip install yt-dlp" title="Copy">📋</button>
+          </div>
+          <p class="text-muted">Hoặc tải từ: <a href="https://github.com/yt-dlp/yt-dlp" target="_blank">github.com/yt-dlp/yt-dlp</a></p>
+        </div>
+        
+        <div class="ytdlp-command">
+          <h4>▶️ Lệnh download:</h4>
+          <div class="code-block">
+            <code id="ytDlpCommandText"></code>
+            <button class="copy-btn" id="copyYtDlpBtn" title="Copy">📋</button>
+          </div>
+        </div>
+        
+        <div class="ytdlp-steps">
+          <h4>📝 Cách dùng:</h4>
+          <ol>
+            <li>Mở Terminal/PowerShell/CMD</li>
+            <li>Click <strong>📋 Copy</strong> để sao chép lệnh</li>
+            <li>Paste vào terminal và nhấn Enter</li>
+            <li>Video sẽ tải về với âm thanh hoàn hảo!</li>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="closeYtDlpModalBtn">Đã hiểu</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
