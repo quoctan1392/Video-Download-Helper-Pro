@@ -16,6 +16,7 @@
     "tabs",
     "activeTab",
     "scripting",
+    "webNavigation",
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [

@@ -89,6 +89,9 @@ body {
 
 /* Material Design 3 Header with gradient */
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: linear-gradient(135deg, rgb(255, 255, 196) 0%, rgb(255, 97, 100) 50%, rgb(176, 0, 18) 100%);
   color: var(--md-sys-color-on-primary);
   padding: 12px 16px;
@@ -122,6 +125,35 @@ body {
   position: relative;
   z-index: 1;
   letter-spacing: 0;
+}
+
+/* Report / Feedback button (lightbulb) in header */
+.report-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: white;
+  background: transparent;
+  border: none;
+  text-decoration: none;
+  box-shadow: var(--md-sys-elevation-1);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.report-btn svg {
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.15));
+}
+.report-btn:hover {
+  background: rgba(255,255,255,0.06);
+  transform: translateY(-1px);
+}
+.report-btn:active {
+  transform: translateY(0);
 }
 
 /* Status bar with Material Design 3 styling */
@@ -509,7 +541,7 @@ body {
 
 .video-dropdown-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 8px 10px;
   cursor: pointer;
@@ -528,6 +560,30 @@ body {
   font-size: 12px;
   color: var(--md-sys-color-on-surface);
   flex: 1;
+  display: inline-block;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 160px; /* limit width so text wraps into two lines */
+  line-height: 1.2;
+}
+
+.video-dropdown-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.mode-note {
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant);
+  background: rgba(0,0,0,0.04);
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 8px;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 4px;
 }
 
 .quality-badge {

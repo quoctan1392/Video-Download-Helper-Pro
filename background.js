@@ -70,6 +70,23 @@ self.addEventListener('unhandledrejection', (event) => {
 
 console.log('[Background] Error handlers installed');
 
+// Clear videos when tab navigates or reloads
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId === 0) { // Main frame only
+    console.log('[Background] Tab navigation detected, clearing videos for tab:', details.tabId);
+    // Remove all videos for this tab
+    for (const [key, video] of detectedVideos.entries()) {
+      if (video.tabId === details.tabId) {
+        detectedVideos.delete(key);
+      }
+    }
+    // Update badge
+    updateBadge(details.tabId);
+  }
+});
+
+console.log('[Background] Navigation listener installed');
+
 // Listen for network requests to detect video streams
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -102,16 +119,22 @@ chrome.webRequest.onBeforeRequest.addListener(
       
       // Store or update video info
       const key = `${tabId}_${url}`;
-      detectedVideos.set(key, videoInfo);
-      console.log('[Background] Total videos stored:', detectedVideos.size);
+      const alreadyExists = detectedVideos.has(key);
       
-      // Notify popup of new video
-      chrome.runtime.sendMessage({
-        action: 'videoDetected',
-        video: videoInfo
-      }).catch(() => {
-        // Popup might not be open
-      });
+      if (!alreadyExists) {
+        detectedVideos.set(key, videoInfo);
+        console.log('[Background] New video added, total:', detectedVideos.size);
+        
+        // Notify popup of new video (only if it's new)
+        chrome.runtime.sendMessage({
+          action: 'videoDetected',
+          video: videoInfo
+        }).catch(() => {
+          // Popup might not be open
+        });
+      } else {
+        console.log('[Background] Video already exists, skipping duplicate:', url.substring(0, 100));
+      }
       
       // Update badge
       updateBadge(tabId);

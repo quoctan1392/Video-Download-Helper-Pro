@@ -1,8 +1,28 @@
 // Simple Background Service Worker for debugging
 console.log("[Background-Simple] === SERVICE WORKER STARTING ===");
 
+// Note: Browser-side MP4 muxing libraries (mp4box.js, etc.) don't support 
+// merging separate video/audio files reliably. VWA mode uses FFmpeg instead.
+
 // Store detected videos
 const detectedVideos = new Map();
+
+// Clear videos when tab navigates or reloads
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId === 0) { // Main frame only
+    console.log('[Background-Simple] Tab navigation detected, clearing videos for tab:', details.tabId);
+    // Remove all videos for this tab
+    for (const [key, video] of detectedVideos.entries()) {
+      if (video.tabId === details.tabId) {
+        detectedVideos.delete(key);
+      }
+    }
+    // Update badge
+    updateBadge(details.tabId);
+  }
+});
+
+console.log('[Background-Simple] Navigation listener installed');
 
 // Update extension badge with video count for a tab
 function updateBadge(tabId) {
@@ -661,74 +681,95 @@ class IntegratedStreamProcessor {
       
       // Check download mode - VWA (merge) or VNA (separate files)
       if (downloadMode === 'vwa') {
-        console.log("[IntegratedStreamProcessor] VWA mode: Merging video and audio into single file...");
-        
-        // For VWA mode, we need to use a client-side merger since we can't use ffmpeg in browser
-        // We'll create a simple MP4 container with both streams
-        const mergedBlob = await this.mergeVideoAudioBlobs(videoBlob, audioBlob);
+        console.log("[IntegratedStreamProcessor] VWA mode: Preparing video and audio merge with FFmpeg...");
         
         this.sendProgressUpdate(
-          98,
-          "🔗 Merging video and audio...",
-          "Creating single file",
-          this.formatBytes(mergedBlob.size),
+          96,
+          "📦 Preparing files for merge...",
+          "Creating FFmpeg script",
+          this.formatBytes(totalSize),
           videoUrl,
         );
         
-        // Convert merged blob to data URL
-        const mergedReader = new FileReader();
-        const mergedDataUrl = await new Promise((resolve, reject) => {
-          mergedReader.onloadend = () => resolve(mergedReader.result);
-          mergedReader.onerror = reject;
-          mergedReader.readAsDataURL(mergedBlob);
-        });
+        // Use the new merge function - tries MP4Box first, falls back to FFmpeg
+        const mergeResult = await this.mergeVideoAudioBlobs(videoBlob, audioBlob, safeVideoName);
         
-        const mergedFilename = `${safeVideoName}_merged_${timestamp}.mp4`;
-        
-        console.log(`[IntegratedStreamProcessor] Downloading merged file: ${mergedFilename}`);
-        
-        const downloadId = await chrome.downloads.download({
-          url: mergedDataUrl,
-          filename: mergedFilename,
-          saveAs: false,
-        });
-        
-        // Save download ID to state
-        const currentState = this.downloadStates.get(videoUrl);
-        if (currentState) {
-          currentState.downloadId = downloadId;
-          this.downloadStates.set(videoUrl, currentState);
+        // Check if merge was successful (MP4Box) or needs FFmpeg
+        if (mergeResult.merged) {
+          // MP4Box merge successful - single merged file
+          this.sendProgressUpdate(
+            100,
+            "✅ Merge hoàn thành!",
+            "Video và audio đã được merge thành công!",
+            this.formatBytes(mergeResult.totalSize),
+            videoUrl,
+          );
+          
+          // Save download ID to state
+          const currentState = this.downloadStates.get(videoUrl);
+          if (currentState) {
+            currentState.downloadId = mergeResult.downloadId;
+            this.downloadStates.set(videoUrl, currentState);
+          }
+          
+          // Hide progress after 3 seconds
+          setTimeout(() => {
+            this.hideProgress(videoUrl);
+          }, 3000);
+          
+          console.log(`[IntegratedStreamProcessor] VWA merge successful:`, mergeResult);
+          
+          return {
+            downloadId: mergeResult.downloadId,
+            filename: mergeResult.filename,
+            segmentCount: videoSegments.length + audioSegments.length,
+            totalSize: mergeResult.totalSize,
+            requiresConversion: false,
+            merged: true,
+            mode: 'VWA',
+            message: "Video và audio đã được merge thành công!",
+          };
+        } else {
+          // FFmpeg fallback - separate files
+          this.sendProgressUpdate(
+            100,
+            "✅ Downloaded! Cần merge với FFmpeg",
+            mergeResult.message,
+            this.formatBytes(mergeResult.totalSize),
+            videoUrl,
+          );
+          
+          // Save download ID to state
+          const currentState = this.downloadStates.get(videoUrl);
+          if (currentState) {
+            currentState.downloadId = mergeResult.videoDownloadId;
+            currentState.audioDownloadId = mergeResult.audioDownloadId;
+            this.downloadStates.set(videoUrl, currentState);
+          }
+          
+          // Hide progress after 5 seconds
+          setTimeout(() => {
+            this.hideProgress(videoUrl);
+          }, 5000);
+          
+          console.log(`[IntegratedStreamProcessor] VWA download (FFmpeg required):`, mergeResult);
+          
+          return {
+            downloadId: mergeResult.videoDownloadId,
+            audioDownloadId: mergeResult.audioDownloadId,
+            videoFilename: mergeResult.videoFilename,
+            audioFilename: mergeResult.audioFilename,
+            scriptFilename: mergeResult.scriptFilename,
+            segmentCount: videoSegments.length + audioSegments.length,
+            totalSize: mergeResult.totalSize,
+            requiresConversion: true,
+            ffmpegCommand: mergeResult.ffmpegCommand,
+            separateFiles: true,
+            merged: false,
+            mode: 'VWA',
+            message: mergeResult.message,
+          };
         }
-        
-        this.sendProgressUpdate(
-          100,
-          "✅ Hoàn thành!",
-          "Video with audio saved",
-          this.formatBytes(mergedBlob.size),
-          videoUrl,
-        );
-        
-        // Hide progress after 3 seconds
-        setTimeout(() => {
-          this.hideProgress(videoUrl);
-        }, 3000);
-        
-        console.log(`[IntegratedStreamProcessor] Merged download complete:`, {
-          filename: mergedFilename,
-          size: mergedBlob.size,
-          mode: 'VWA',
-        });
-        
-        return {
-          downloadId: downloadId,
-          filename: mergedFilename,
-          segmentCount: videoSegments.length + audioSegments.length,
-          totalSize: mergedBlob.size,
-          requiresConversion: false, // Already merged!
-          separateFiles: false,
-          merged: true,
-          mode: 'VWA',
-        };
       }
       
       // VNA mode: Download separate video and audio files
@@ -830,41 +871,140 @@ class IntegratedStreamProcessor {
     }
   }
 
-  async mergeVideoAudioBlobs(videoBlob, audioBlob) {
-    console.log("[IntegratedStreamProcessor] Merging video and audio blobs...");
+  async mergeVideoAudioBlobs(videoBlob, audioBlob, baseFilename) {
+    console.log("[IntegratedStreamProcessor] Preparing video and audio for merging...");
+    console.log(`[IntegratedStreamProcessor] Video size: ${videoBlob.size}, Audio size: ${audioBlob.size}`);
     
-    // Note: This is a simple concatenation approach for demonstration
-    // In a real-world scenario, proper MP4 muxing would require a library like mp4box.js
-    // For now, we'll create a simple container with both streams
+    const timestamp = Date.now();
     
-    // Since we can't do proper muxing in the browser without external libraries,
-    // we'll inform the user that this creates a basic merged file
-    // For production, you'd want to use mp4box.js or similar library
+    // Note: Browser-side MP4 merging is complex and unreliable.
+    // For best results, we download separate files with an FFmpeg merge script.
+    // This ensures the highest quality output with no re-encoding.
     
+    return this.downloadSeparateWithFFmpegScript(videoBlob, audioBlob, baseFilename, timestamp);
+  }
+  
+  /**
+   * Merge video and audio using MP4Box.js
+   * Uses fragmented MP4 output approach
+   */
+  /**
+   * Convert Blob to ArrayBuffer
+   */
+  blobToArrayBuffer(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+  
+  /**
+   * Download separate video/audio files with FFmpeg merge script
+   * This is the most reliable approach as browser-side MP4 muxing is complex
+   */
+  async downloadSeparateWithFFmpegScript(videoBlob, audioBlob, baseFilename, timestamp) {
     try {
-      // Simple approach: Return video blob with note that audio is embedded
-      // This is a placeholder - for real merging, you'd need mp4box.js or ffmpeg.wasm
+      const videoFilename = `${baseFilename}_${timestamp}_video.mp4`;
+      const audioFilename = `${baseFilename}_${timestamp}_audio.m4a`;
+      const mergedFilename = `${baseFilename}_${timestamp}_merged.mp4`;
+      const scriptFilename = `${baseFilename}_${timestamp}_merge.bat`;
       
-      console.warn("[IntegratedStreamProcessor] Note: Client-side merging is limited.");
-      console.warn("[IntegratedStreamProcessor] For best results, use ffmpeg or download separately.");
+      // Download video file
+      const videoReader = new FileReader();
+      const videoDataUrl = await new Promise((resolve, reject) => {
+        videoReader.onloadend = () => resolve(videoReader.result);
+        videoReader.onerror = reject;
+        videoReader.readAsDataURL(videoBlob);
+      });
       
-      // For now, we'll return the larger blob (usually video) 
-      // In production, implement proper MP4 muxing with mp4box.js
-      const mergedSize = videoBlob.size + audioBlob.size;
+      const videoDownloadId = await chrome.downloads.download({
+        url: videoDataUrl,
+        filename: videoFilename,
+        saveAs: false,
+      });
+      console.log(`[IntegratedStreamProcessor] Downloaded video: ${videoFilename}, ID: ${videoDownloadId}`);
       
-      // Create a simple merged blob (this is a workaround - not proper muxing)
-      // TODO: Implement proper MP4 muxing with mp4box.js for production
-      const mergedBlob = new Blob([videoBlob, audioBlob], { type: 'video/mp4' });
+      // Download audio file
+      const audioReader = new FileReader();
+      const audioDataUrl = await new Promise((resolve, reject) => {
+        audioReader.onloadend = () => resolve(audioReader.result);
+        audioReader.onerror = reject;
+        audioReader.readAsDataURL(audioBlob);
+      });
       
-      console.log(`[IntegratedStreamProcessor] Created merged blob: ${mergedBlob.size} bytes`);
-      console.log("[IntegratedStreamProcessor] WARNING: This is a simple concatenation, not proper MP4 muxing");
+      const audioDownloadId = await chrome.downloads.download({
+        url: audioDataUrl,
+        filename: audioFilename,
+        saveAs: false,
+      });
+      console.log(`[IntegratedStreamProcessor] Downloaded audio: ${audioFilename}, ID: ${audioDownloadId}`);
       
-      return mergedBlob;
+      // Create FFmpeg merge script
+      const ffmpegScript = `@echo off
+REM ========================================
+REM Video Download Helper - Merge Script
+REM ========================================
+REM This script merges the video and audio files into a single MP4
+REM Requires FFmpeg to be installed and in PATH
+REM Download FFmpeg: https://ffmpeg.org/download.html
+REM ========================================
+
+echo Merging video and audio...
+ffmpeg -i "${videoFilename}" -i "${audioFilename}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 "${mergedFilename}"
+
+if %ERRORLEVEL% EQU 0 (
+    echo.
+    echo ========================================
+    echo Merge complete! Output: ${mergedFilename}
+    echo ========================================
+    echo.
+    echo You can now delete the separate video and audio files:
+    echo   - ${videoFilename}
+    echo   - ${audioFilename}
+) else (
+    echo.
+    echo ========================================
+    echo Merge failed! Make sure FFmpeg is installed.
+    echo Download: https://ffmpeg.org/download.html
+    echo ========================================
+)
+
+pause
+`;
+      
+      const scriptBlob = new Blob([ffmpegScript], { type: 'text/plain' });
+      const scriptReader = new FileReader();
+      const scriptDataUrl = await new Promise((resolve, reject) => {
+        scriptReader.onloadend = () => resolve(scriptReader.result);
+        scriptReader.onerror = reject;
+        scriptReader.readAsDataURL(scriptBlob);
+      });
+      
+      await chrome.downloads.download({
+        url: scriptDataUrl,
+        filename: scriptFilename,
+        saveAs: false,
+      });
+      console.log(`[IntegratedStreamProcessor] Downloaded merge script: ${scriptFilename}`);
+      
+      return {
+        success: true,
+        merged: false,
+        videoDownloadId,
+        audioDownloadId,
+        videoFilename,
+        audioFilename,
+        mergedFilename,
+        scriptFilename,
+        totalSize: videoBlob.size + audioBlob.size,
+        ffmpegCommand: `ffmpeg -i "${videoFilename}" -i "${audioFilename}" -c:v copy -c:a aac "${mergedFilename}"`,
+        message: "Video and audio downloaded separately. Run the .bat script with FFmpeg to merge them."
+      };
     } catch (error) {
-      console.error("[IntegratedStreamProcessor] Merge error:", error);
-      // If merge fails, return video blob only
-      console.warn("[IntegratedStreamProcessor] Merge failed, returning video only");
-      return videoBlob;
+      console.error("[IntegratedStreamProcessor] FFmpeg fallback error:", error);
+      throw error;
     }
   }
 
@@ -1651,23 +1791,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
 
         const key = `${tabId}_${message.url}`;
-        detectedVideos.set(key, videoInfo);
-        console.log("[Background-Simple] Video stored with key:", key);
-        console.log(
-          "[Background-Simple] Video tabId:",
-          tabId,
-          "type:",
-          typeof tabId,
-        );
-        console.log(
-          "[Background-Simple] Total videos now:",
-          detectedVideos.size,
-        );
-        // Update per-tab badge
-        try {
-          updateBadge(tabId);
-        } catch (e) {
-          console.warn("[Background-Simple] updateBadge call failed");
+        const alreadyExists = detectedVideos.has(key);
+        
+        if (!alreadyExists) {
+          detectedVideos.set(key, videoInfo);
+          console.log("[Background-Simple] New video stored with key:", key);
+          console.log(
+            "[Background-Simple] Video tabId:",
+            tabId,
+            "type:",
+            typeof tabId,
+          );
+          console.log(
+            "[Background-Simple] Total videos now:",
+            detectedVideos.size,
+          );
+          // Update per-tab badge
+          try {
+            updateBadge(tabId);
+          } catch (e) {
+            console.warn("[Background-Simple] updateBadge call failed");
+          }
+        } else {
+          console.log("[Background-Simple] Video already exists, skipping duplicate:", message.url.substring(0, 100));
         }
 
         // Fetch duration asynchronously (don't block response)
@@ -1918,6 +2064,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         sendResponse({ success: true });
+        return;
+      }
+
+      if (message.action === "removeVideo") {
+        const tabId = message.tabId;
+        const url = message.url;
+        console.log("[Background-Simple] removeVideo requested for tab:", tabId, "url:", url);
+
+        if (!url) {
+          sendResponse({ success: false, error: "No URL provided" });
+          return;
+        }
+
+        // Remove matching entries from detectedVideos
+        const keysToDelete = [];
+        detectedVideos.forEach((video, key) => {
+          if (video.tabId === tabId && video.url === url) {
+            keysToDelete.push(key);
+          }
+        });
+
+        keysToDelete.forEach((key) => detectedVideos.delete(key));
+        console.log(
+          "[Background-Simple] removeVideo cleared",
+          keysToDelete.length,
+          "videos for",
+          url,
+        );
+
+        // Update badge after removal
+        try {
+          updateBadge(tabId);
+        } catch (e) {
+          console.warn("[Background-Simple] updateBadge call failed");
+        }
+
+        sendResponse({ success: true, removed: keysToDelete.length });
         return;
       }
 

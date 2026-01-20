@@ -138,6 +138,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   document
     .getElementById("errorInfoBtn")
     .addEventListener("click", showErrorDetails);
+
+  // Report / feedback button in header
+  try {
+    const reportUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeWc5mpKu3-7pRnFRKv_OJCLHyV9Lzw0Xl0g-RfdZFXNCuYxA/viewform?usp=publish-editor";
+    const reportBtn = document.getElementById("reportIdea");
+    if (reportBtn) {
+      reportBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        // Prefer chrome.tabs.create when available to open new tab from extension popup
+        try {
+          if (chrome && chrome.tabs && chrome.tabs.create) {
+            chrome.tabs.create({ url: reportUrl });
+          } else {
+            window.open(reportUrl, "_blank", "noopener");
+          }
+        } catch (err) {
+          window.open(reportUrl, "_blank", "noopener");
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("[Popup] report button init failed:", err);
+  }
   document
     .getElementById("closeErrorModal")
     .addEventListener("click", closeErrorModal);
@@ -1276,11 +1299,14 @@ function generateVideoItemHTML(video, index) {
               <div class="video-dropdown-header">Download mode</div>
               <div class="video-dropdown-item active" data-mode="vna">
                 <span class="badge badge-vna">VNA</span>
-                <span class="video-dropdown-item-text">Video and audio</span>
+                <span class="video-dropdown-item-text">Download video and audio as separate files (video + audio)</span>
               </div>
               <div class="video-dropdown-item" data-mode="vwa">
                 <span class="badge badge-vwa">VWA</span>
-                <span class="video-dropdown-item-text">Video with audio</span>
+                <div class="video-dropdown-item-body">
+                  <span class="video-dropdown-item-text">Download merged MP4 (video + audio)</span>
+                  <span class="mode-note">Coming soon</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1804,7 +1830,11 @@ function attachVideoEventListenersForItem(videoItem) {
   deleteBtns.forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const url = btn.getAttribute("data-url");
+      // decode possible HTML-escaped attribute value to get original URL
+      const rawAttr = btn.getAttribute("data-url");
+      const decodeDiv = document.createElement('div');
+      decodeDiv.innerHTML = rawAttr || '';
+      const url = decodeDiv.textContent || rawAttr || '';
       addLog("info", "Popup", `Remove clicked: ${url}`);
 
       // Remove from currentVideos and re-render list
@@ -1935,9 +1965,49 @@ async function downloadVideoWithQuality(video, quality) {
       }
 
       if (result.segmentCount) {
-        updateStatus(`Merged ${result.segmentCount} segments! 🎉`, "✅");
-        lastError = null;
-        hideErrorInfo();
+        // Check if this is VWA mode
+        if (result.mode === 'VWA') {
+          if (result.merged) {
+            // Browser-side merge successful (rare) - single merged file
+            updateStatus(`Merge thành công! 🎉`, "✅");
+            addLog(
+              "success",
+              "Popup",
+              `VWA mode: ${result.segmentCount} segments merged successfully into ${result.filename}`,
+            );
+            lastError = null;
+            hideErrorInfo();
+          } else if (result.requiresConversion || result.sameDirectory) {
+            // FFmpeg approach - video + audio downloaded separately + merge script
+            updateStatus(`Video + Audio đã tải! Chạy file .bat để merge 🎬`, "✅");
+            addLog(
+              "success",
+              "Popup",
+              `VWA mode: Video và audio đã tải. Chạy file .bat để merge bằng FFmpeg.`,
+            );
+            addLog(
+              "info",
+              "Popup",
+              `FFmpeg command: ${result.ffmpegCommand}`,
+            );
+            
+            // Store info for reference - show instructions for merge
+            lastError = {
+              message: "Video và Audio đã tải xong! Chạy file .bat trong thư mục Downloads để merge.",
+              video: video,
+              timestamp: new Date().toLocaleString("vi-VN"),
+              type: "vwa_merge_info",
+              ffmpegCommand: result.ffmpegCommand,
+              scriptFilename: result.scriptFilename,
+              instruction: "Cài FFmpeg từ https://ffmpeg.org/download.html rồi chạy file .bat"
+            };
+            showErrorInfo();
+          }
+        } else {
+          updateStatus(`Merged ${result.segmentCount} segments! 🎉`, "✅");
+          lastError = null;
+          hideErrorInfo();
+        }
       } else if (result.requiresConversion && result.ffmpegCommand) {
         // Show FFmpeg command for conversion
         if (result.skipDownload) {
@@ -2202,6 +2272,56 @@ function closeErrorModal() {
 function getErrorSuggestions(error) {
   const suggestions = [];
   const message = error.message.toLowerCase();
+
+  // VWA mode - video and audio downloaded separately, needs FFmpeg merge
+  if (error.type === "vwa_merge_info" && error.ffmpegCommand) {
+    suggestions.push(
+      '✅ <strong>Video + Audio đã tải xong!</strong> Cần merge để hoàn thành.',
+    );
+    suggestions.push(
+      '<hr style="border-color:#444;margin:8px 0;">',
+    );
+    suggestions.push(
+      '<strong>🔧 Cách 1: Dùng FFmpeg (Khuyến nghị)</strong>',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Cài FFmpeg từ <a href="https://ffmpeg.org/download.html" target="_blank">ffmpeg.org</a>',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Chạy file .bat trong thư mục Downloads',
+    );
+    suggestions.push(
+      '<hr style="border-color:#444;margin:8px 0;">',
+    );
+    suggestions.push(
+      '<strong>🎬 Cách 2: Dùng VLC (Không cần cài gì thêm)</strong>',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Mở VLC → Media → Convert/Save',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Add file video → Show more options',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Chọn "Play another media synchronously" → Add file audio',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• Convert/Save → Chọn format và xuất',
+    );
+    suggestions.push(
+      '<hr style="border-color:#444;margin:8px 0;">',
+    );
+    suggestions.push(
+      '<strong>🌐 Cách 3: Dùng Online Tools</strong>',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• <a href="https://www.kapwing.com/tools/merge-video" target="_blank">Kapwing</a> - Miễn phí, dễ dùng',
+    );
+    suggestions.push(
+      '&nbsp;&nbsp;• <a href="https://cloudconvert.com/mp4-converter" target="_blank">CloudConvert</a> - Hỗ trợ nhiều format',
+    );
+    return suggestions;
+  }
 
   if (error.type === "ffmpeg_required" && error.ffmpegCommand) {
     suggestions.push(
