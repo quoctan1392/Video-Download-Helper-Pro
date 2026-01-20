@@ -16,9 +16,14 @@
         }
         
         if (message.action === 'scanVideos') {
-          console.log('[Content] Manual scan requested (from existing listener)');
+          console.log('[Content] Manual scan requested (from existing listener) - forcing re-scan');
           if (window.__detectVideoElements) {
-            window.__detectVideoElements();
+            // Clear detected URLs cache
+            if (window.__detectedUrls) {
+              window.__detectedUrls.clear();
+              console.log('[Content] Cleared detectedUrls cache');
+            }
+            window.__detectVideoElements(true); // Force scan
           }
           sendResponse({ success: true });
           return true;
@@ -72,9 +77,12 @@
   const DETECT_COOLDOWN = 2000; // Don't detect more than once per 2 seconds
   const detectedUrls = new Set(); // Track already detected URLs
   
-  function detectVideoElements() {
+  // Make detectedUrls available globally for clearing on refresh
+  window.__detectedUrls = detectedUrls;
+  
+  function detectVideoElements(force = false) {
     const now = Date.now();
-    if (now - lastDetectTime < DETECT_COOLDOWN) {
+    if (!force && now - lastDetectTime < DETECT_COOLDOWN) {
       console.log('[Content] Skipping scan (cooldown)');
       return;
     }
@@ -85,8 +93,13 @@
     videos.forEach(video => {
       const src = video.src || video.currentSrc;
       if (src && !src.startsWith('blob:')) {
-        // Skip if already detected
-        if (detectedUrls.has(src)) {
+        // If force, clear the detected flag for this URL so it can be re-detected
+        if (force && detectedUrls.has(src)) {
+          console.log('[Content] Force re-detecting:', src.substring(0, 100));
+        }
+        
+        // Skip if already detected (unless forced)
+        if (!force && detectedUrls.has(src)) {
           return;
         }
         detectedUrls.add(src);
@@ -104,8 +117,13 @@
       const sources = video.querySelectorAll('source');
       sources.forEach(source => {
         if (source.src) {
-          // Skip if already detected
-          if (detectedUrls.has(source.src)) {
+          // If force, clear the detected flag for this URL so it can be re-detected
+          if (force && detectedUrls.has(source.src)) {
+            console.log('[Content] Force re-detecting source:', source.src.substring(0, 100));
+          }
+          
+          // Skip if already detected (unless forced)
+          if (!force && detectedUrls.has(source.src)) {
             return;
           }
           detectedUrls.add(source.src);
@@ -176,8 +194,12 @@
     }
     
     if (message.action === 'scanVideos') {
-      console.log('[Content] Manual scan requested');
-      detectVideoElements();
+      console.log('[Content] Manual scan requested - forcing re-scan');
+      // Clear the detected URLs set to allow re-detection
+      detectedUrls.clear();
+      console.log('[Content] Cleared detectedUrls cache');
+      // Force scan bypassing cooldown
+      detectVideoElements(true);
       sendResponse({ success: true });
       return true;
     }

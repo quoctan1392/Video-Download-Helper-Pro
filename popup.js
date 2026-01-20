@@ -158,6 +158,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     .getElementById("refreshLogBtn")
     .addEventListener("click", refreshLog);
 
+  // Close video dropdowns when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".video-dropdown-wrapper")) {
+      document.querySelectorAll(".video-dropdown-menu.show").forEach(menu => {
+        menu.classList.remove("show");
+        menu.previousElementSibling?.classList.remove("active");
+      });
+    }
+  });
+
   // Close modal when clicking outside
   document.getElementById("errorModal").addEventListener("click", (e) => {
     if (e.target.id === "errorModal") {
@@ -393,9 +403,14 @@ function updateVideoProgress(data) {
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
             `;
-            folderBtn.addEventListener("click", () =>
-              openDownloadFolder(data.downloadId),
-            );
+            folderBtn.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              try {
+                await chrome.downloads.show(data.downloadId);
+              } catch (err) {
+                console.error('[Popup] Failed to open folder for', data.downloadId, err);
+              }
+            });
             videoActions.insertBefore(
               folderBtn,
               videoActions.querySelector(".delete-btn"),
@@ -778,8 +793,8 @@ async function loadLogsFromStorage() {
 
 // Refresh videos - clear cache and reload videos
 async function refreshVideos() {
-  updateStatus("Refreshing...", "🔄");
-  addLog("info", "Popup", "Clearing cache and refreshing...");
+  updateStatus("Đang tải lại trang...", "🔄");
+  addLog("info", "Popup", "Reloading tab to refresh videos...");
 
   try {
     // Clear persisted videos from storage
@@ -798,54 +813,22 @@ async function refreshVideos() {
     currentVideos = [];
     displayVideos(); // Show empty state
 
-    updateStatus("Cache cleared! Rescanning...", "✅");
-    addLog("success", "Popup", "Cache cleared, re-scanning...");
+    // Reload the tab
+    await chrome.tabs.reload(currentTabId);
+    console.log("[Popup] Tab reloaded");
+    addLog("success", "Popup", "Tab reloaded successfully");
 
-    // Ensure content script is injected before scanning
-    try {
-      const testResponse = await chrome.tabs
-        .sendMessage(currentTabId, { action: "ping" })
-        .catch(() => null);
+    updateStatus("Đã tải lại trang, đang quét video...", "✅");
 
-      if (!testResponse) {
-        console.log("[Popup] Content script not detected, injecting...");
-
-        // Inject both content and injected scripts
-        await chrome.scripting.executeScript({
-          target: { tabId: currentTabId },
-          files: ["content.js"],
-        });
-
-        await chrome.scripting.executeScript({
-          target: { tabId: currentTabId, allFrames: true },
-          files: ["injected.js"],
-          world: "MAIN",
-        });
-
-        addLog("info", "Popup", "Content and injected scripts injected");
-
-        // Wait for scripts to initialize
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      }
-
-      // Now send scan command
-      await chrome.tabs.sendMessage(currentTabId, { action: "scanVideos" });
-      console.log("[Popup] Sent scanVideos to content script");
-      addLog("success", "Popup", "Scan command sent");
-    } catch (e) {
-      console.log("[Popup] Could not send scanVideos:", e.message);
-      addLog("warn", "Popup", `Scan failed: ${e.message}`);
-    }
-
-    // Wait a bit then reload videos from background
+    // Wait for page to load and scripts to detect videos
     setTimeout(() => {
+      console.log("[Popup] Loading videos after tab reload...");
       loadVideos();
-    }, 1500);
+    }, 2500);
   } catch (error) {
     console.error("[Popup] Error refreshing:", error);
     addLog("error", "Popup", `Refresh error: ${error.message}`);
     updateStatus("Lỗi khi làm mới", "❌");
-    updateStatus(`Error refreshing: ${error?.message || ""}`, "❌");
   }
 }
 
@@ -1281,13 +1264,58 @@ function generateVideoItemHTML(video, index) {
         ${
           isStreaming
             ? `
-        <select class="quality-select" data-url="${escapeHtml(video.url)}" data-index="${index}">
-          <option value='{"height":1080,"resolution":"1920x1080","label":"1080p"}'>1080p - Full HD</option>
-          <option value='{"height":720,"resolution":"1280x720","label":"720p"}'>720p - HD</option>
-          <option value='{"height":480,"resolution":"854x480","label":"480p"}'>480p - SD</option>
-          <option value='{"height":360,"resolution":"640x360","label":"360p"}'>360p</option>
-          <option value='{"height":240,"resolution":"426x240","label":"240p"}'>240p</option>
-        </select>
+        <div class="video-mode-wrapper">
+          <div class="video-dropdown-wrapper">
+            <button class="video-dropdown-toggle mode-toggle" data-url="${escapeHtml(video.url)}">
+              <span class="badge badge-vna">VNA</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div class="video-dropdown-menu mode-menu">
+              <div class="video-dropdown-header">Download mode</div>
+              <div class="video-dropdown-item active" data-mode="vna">
+                <span class="badge badge-vna">VNA</span>
+                <span class="video-dropdown-item-text">Video and audio</span>
+              </div>
+              <div class="video-dropdown-item" data-mode="vwa">
+                <span class="badge badge-vwa">VWA</span>
+                <span class="video-dropdown-item-text">Video with audio</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="video-dropdown-wrapper quality-dropdown-wrapper">
+          <button class="video-dropdown-toggle quality-toggle" data-url="${escapeHtml(video.url)}" data-index="${index}">
+            <span class="quality-label">1080p</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <div class="video-dropdown-menu quality-menu">
+            <div class="video-dropdown-header">Quality</div>
+            <div class="video-dropdown-item active" data-quality='{"height":1080,"resolution":"1920x1080","label":"1080p"}'>
+              <span class="badge quality-badge">1080p</span>
+              <span class="video-dropdown-item-text">1920x1080</span>
+            </div>
+            <div class="video-dropdown-item" data-quality='{"height":720,"resolution":"1280x720","label":"720p"}'>
+              <span class="badge quality-badge">720p</span>
+              <span class="video-dropdown-item-text">1280x720</span>
+            </div>
+            <div class="video-dropdown-item" data-quality='{"height":480,"resolution":"854x480","label":"480p"}'>
+              <span class="badge quality-badge">480p</span>
+              <span class="video-dropdown-item-text">854x480</span>
+            </div>
+            <div class="video-dropdown-item" data-quality='{"height":360,"resolution":"640x360","label":"360p"}'>
+              <span class="badge quality-badge">360p</span>
+              <span class="video-dropdown-item-text">640x360</span>
+            </div>
+            <div class="video-dropdown-item" data-quality='{"height":240,"resolution":"426x240","label":"240p"}'>
+              <span class="badge quality-badge">240p</span>
+              <span class="video-dropdown-item-text">426x240</span>
+            </div>
+          </div>
+        </div>
         `
             : ""
         }
@@ -1414,16 +1442,198 @@ function attachVideoEventListeners() {
 
 // Attach event listeners to a single video item
 function attachVideoEventListenersForItem(videoItem) {
-  // Prevent dropdown from closing when clicking
-  const qualitySelects = videoItem.querySelectorAll(".quality-select");
-  qualitySelects.forEach((select) => {
-    select.addEventListener("mousedown", (e) => {
+  // Setup download mode dropdown
+  const modeToggle = videoItem.querySelector(".mode-toggle");
+  const modeMenu = videoItem.querySelector(".mode-menu");
+  const modeItems = videoItem.querySelectorAll(".mode-menu .video-dropdown-item");
+  
+  if (modeToggle && modeMenu) {
+    // Toggle dropdown
+    modeToggle.addEventListener("click", (e) => {
       e.stopPropagation();
+      
+      // Close other open dropdowns first
+      document.querySelectorAll(".video-dropdown-menu.show").forEach(menu => {
+        if (menu !== modeMenu) {
+          menu.classList.remove("show");
+          menu.classList.remove("dropdown-down");
+          menu.previousElementSibling?.classList.remove("active");
+        }
+      });
+      
+      const isOpening = !modeMenu.classList.contains("show");
+      
+      if (isOpening) {
+        // Portal menu to body for proper z-index
+        document.body.appendChild(modeMenu);
+        
+        // Calculate position
+        const toggleRect = modeToggle.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - toggleRect.bottom;
+        const spaceAbove = toggleRect.top;
+        const menuHeight = 150;
+        
+        // Position dropdown
+        modeMenu.style.left = toggleRect.left + 'px';
+        modeMenu.style.minWidth = toggleRect.width + 'px';
+        
+        if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+          // Open upward
+          modeMenu.style.bottom = (viewportHeight - toggleRect.top + 4) + 'px';
+          modeMenu.style.top = 'auto';
+          modeMenu.classList.remove("dropdown-down");
+        } else {
+          // Open downward
+          modeMenu.style.top = (toggleRect.bottom + 4) + 'px';
+          modeMenu.style.bottom = 'auto';
+          modeMenu.classList.add("dropdown-down");
+        }
+      }
+      
+      modeToggle.classList.toggle("active");
+      modeMenu.classList.toggle("show");
+      
+      // Move back when closing
+      if (!isOpening) {
+        // Return menu to original parent after animation
+        setTimeout(() => {
+          if (!modeMenu.classList.contains("show")) {
+            const wrapper = modeToggle.parentElement;
+            if (wrapper) wrapper.appendChild(modeMenu);
+          }
+        }, 200);
+      }
     });
-    select.addEventListener("click", (e) => {
+    
+    // Handle item selection
+    modeItems.forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const mode = item.dataset.mode;
+        
+        // Update active state in this dropdown
+        modeItems.forEach(i => i.classList.remove("active"));
+        item.classList.add("active");
+        
+        // Update toggle button badge
+        const badgeClass = mode === "vna" ? "badge-vna" : "badge-vwa";
+        const badgeText = mode === "vna" ? "VNA" : "VWA";
+        
+        const toggleBadge = modeToggle.querySelector(".badge");
+        toggleBadge.className = `badge ${badgeClass}`;
+        toggleBadge.textContent = badgeText;
+        
+        // Store mode in toggle's data attribute
+        modeToggle.dataset.selectedMode = mode;
+        
+        // Close dropdown
+        modeToggle.classList.remove("active");
+        modeMenu.classList.remove("show");
+        
+        console.log(`[Popup] Download mode set to ${mode.toUpperCase()} for video`);
+      });
+    });
+  }
+  
+  // Setup quality dropdown (badge-style)
+  const qualityToggle = videoItem.querySelector(".quality-toggle");
+  const qualityMenu = videoItem.querySelector(".quality-menu");
+  const qualityItems = videoItem.querySelectorAll(".quality-menu .video-dropdown-item");
+  if (qualityToggle && qualityMenu) {
+    // Initialize selected quality on toggle (use first active or first item)
+    const initial = videoItem.querySelector('.quality-menu .video-dropdown-item.active') || qualityItems[0];
+    if (initial) {
+      try {
+        const q = JSON.parse(initial.dataset.quality);
+        qualityToggle.dataset.selectedQuality = JSON.stringify(q);
+        const label = q.label || initial.textContent.trim();
+        const labelSpan = qualityToggle.querySelector('.quality-label');
+        if (labelSpan) labelSpan.textContent = label;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Toggle dropdown
+    qualityToggle.addEventListener('click', (e) => {
       e.stopPropagation();
+
+      // Close other dropdowns
+      document.querySelectorAll('.video-dropdown-menu.show').forEach(menu => {
+        if (menu !== qualityMenu) {
+          menu.classList.remove('show');
+          menu.classList.remove('dropdown-down');
+          menu.previousElementSibling?.classList.remove('active');
+        }
+      });
+
+      const isOpening = !qualityMenu.classList.contains('show');
+      
+      if (isOpening) {
+        // Portal menu to body for proper z-index
+        document.body.appendChild(qualityMenu);
+        
+        // Calculate position
+        const toggleRect = qualityToggle.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - toggleRect.bottom;
+        const spaceAbove = toggleRect.top;
+        const menuHeight = 250;
+        
+        // Position dropdown
+        qualityMenu.style.left = toggleRect.left + 'px';
+        qualityMenu.style.minWidth = toggleRect.width + 'px';
+        
+        if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+          // Open upward
+          qualityMenu.style.bottom = (viewportHeight - toggleRect.top + 4) + 'px';
+          qualityMenu.style.top = 'auto';
+          qualityMenu.classList.remove('dropdown-down');
+        } else {
+          // Open downward
+          qualityMenu.style.top = (toggleRect.bottom + 4) + 'px';
+          qualityMenu.style.bottom = 'auto';
+          qualityMenu.classList.add('dropdown-down');
+        }
+      }
+
+      qualityToggle.classList.toggle('active');
+      qualityMenu.classList.toggle('show');
+      
+      // Move back when closing
+      if (!isOpening) {
+        // Return menu to original parent after animation
+        setTimeout(() => {
+          if (!qualityMenu.classList.contains('show')) {
+            const wrapper = qualityToggle.parentElement;
+            if (wrapper) wrapper.appendChild(qualityMenu);
+          }
+        }, 200);
+      }
     });
-  });
+
+    // Handle item selection
+    qualityItems.forEach((item) => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        qualityItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        // Update toggle label
+        const q = item.dataset.quality ? JSON.parse(item.dataset.quality) : null;
+        if (q) {
+          qualityToggle.dataset.selectedQuality = JSON.stringify(q);
+          const labelSpan = qualityToggle.querySelector('.quality-label');
+          if (labelSpan) labelSpan.textContent = q.label || labelSpan.textContent;
+        }
+
+        // Close menu
+        qualityToggle.classList.remove('active');
+        qualityMenu.classList.remove('show');
+      });
+    });
+  }
 
   // Add click handlers for folder buttons
   const folderBtns = videoItem.querySelectorAll(".folder-btn");
@@ -1482,14 +1692,12 @@ function attachVideoEventListenersForItem(videoItem) {
         return;
       }
 
-      // Get selected quality from dropdown if exists
-      const qualitySelect = document.querySelector(
-        `.quality-select[data-index="${index}"]`,
-      );
+      // Get selected quality from badge-style dropdown if exists
+      const qualityToggleEl = document.querySelector(`.quality-toggle[data-index="${index}"]`);
       let quality = null;
-      if (qualitySelect && qualitySelect.value) {
+      if (qualityToggleEl && qualityToggleEl.dataset.selectedQuality) {
         try {
-          quality = JSON.parse(qualitySelect.value);
+          quality = JSON.parse(qualityToggleEl.dataset.selectedQuality);
         } catch (e) {
           quality = null;
         }
@@ -1639,6 +1847,20 @@ async function downloadVideoWithQuality(video, quality) {
       "Popup",
       `Is streaming: ${isStreaming}, type: ${video.type}`,
     );
+    
+    // Get download mode from video item's dropdown (if streaming video)
+    let downloadMode = 'vna'; // Default
+    if (isStreaming) {
+      const videoItem = document.querySelector(`.video-item[data-url="${CSS.escape(video.url)}"]`);
+      if (videoItem) {
+        const modeToggle = videoItem.querySelector(".mode-toggle");
+        if (modeToggle && modeToggle.dataset.selectedMode) {
+          downloadMode = modeToggle.dataset.selectedMode;
+        }
+      }
+    }
+    
+    addLog("info", "Popup", `Download mode: ${downloadMode.toUpperCase()}`);
 
     if (isStreaming) {
       updateStatus("Analyzing stream...", "🔄");
@@ -1655,6 +1877,7 @@ async function downloadVideoWithQuality(video, quality) {
       options: {
         convertToMP4: isStreaming,
         quality: quality, // Pass selected quality
+        downloadMode: downloadMode, // Pass download mode (vna or vwa)
       },
     });
 
@@ -1676,7 +1899,39 @@ async function downloadVideoWithQuality(video, quality) {
           currentVideos[videoIndex].downloadId = result.downloadId;
         }
         await saveVideosToStorage();
-        // Display will be refreshed by updateVideoProgress after completion
+        // Update DOM now to reflect downloaded state (show badge + folder button)
+        const videoItem = document.querySelector(`.video-item[data-url="${CSS.escape(video.url)}"]`);
+        if (videoItem) {
+          // Add downloaded badge if missing
+          const videoHeader = videoItem.querySelector('.video-item-header');
+          if (videoHeader && !videoHeader.querySelector('.video-badge.downloaded')) {
+            const badge = document.createElement('span');
+            badge.className = 'video-badge downloaded';
+            badge.textContent = '✓ Downloaded';
+            const ref = videoHeader.querySelector('.video-duration');
+            videoHeader.insertBefore(badge, ref);
+          }
+
+          // Add folder button if downloadId present and missing
+          const videoActions = videoItem.querySelector('.video-actions');
+          if (videoActions && result.downloadId && !videoActions.querySelector('.folder-btn')) {
+            const folderBtn = document.createElement('button');
+            folderBtn.className = 'folder-btn';
+            folderBtn.setAttribute('data-download-id', result.downloadId);
+            folderBtn.title = 'Open folder';
+            folderBtn.innerHTML = `\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">\n                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>\n              </svg>\n            `;
+            folderBtn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              try {
+                await chrome.downloads.show(result.downloadId);
+              } catch (err) {
+                console.error('[Popup] Failed to open folder for', result.downloadId, err);
+              }
+            });
+            const deleteBtn = videoActions.querySelector('.delete-btn');
+            videoActions.insertBefore(folderBtn, deleteBtn);
+          }
+        }
       }
 
       if (result.segmentCount) {
