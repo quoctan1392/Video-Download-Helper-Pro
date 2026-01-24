@@ -249,6 +249,11 @@ class IntegratedStreamProcessor {
     });
 
     try {
+      // Handle YouTube videos specially
+      if (type?.startsWith("youtube")) {
+        return await this.handleYouTubeVideo(video, options);
+      }
+      
       // For streaming protocols, parse manifest and download segments
       if (type === "dash" || type === "hls" || type === "mpd") {
         return await this.handleStreamingProtocol(video, options);
@@ -259,6 +264,134 @@ class IntegratedStreamProcessor {
     } catch (error) {
       console.error("[IntegratedStreamProcessor] Processing error:", error);
       // Fallback to manifest download
+      return await this.downloadManifestFallback(video, options);
+    }
+  }
+
+  async handleYouTubeVideo(video, options) {
+    console.log("[IntegratedStreamProcessor] Handling YouTube video:", video.type);
+    console.log("[IntegratedStreamProcessor] Video object keys:", Object.keys(video));
+    console.log("[IntegratedStreamProcessor] Formats:", video.formats);
+    console.log("[IntegratedStreamProcessor] Formats count:", video.formats?.length || 0);
+    console.log("[IntegratedStreamProcessor] DASH manifest URL:", video.dashManifestUrl);
+    console.log("[IntegratedStreamProcessor] HLS manifest URL:", video.hlsManifestUrl);
+    
+    try {
+      // YouTube adaptive formats - we have direct URLs in video.formats
+      if (video.type === "youtube" && video.formats && video.formats.length > 0) {
+        console.log("[IntegratedStreamProcessor] YouTube adaptive formats available:", video.formats.length);
+        
+        // Check if any formats have URLs
+        const formatsWithUrls = video.formats.filter(f => f.url);
+        console.log("[IntegratedStreamProcessor] Formats with URLs:", formatsWithUrls.length);
+        
+        if (formatsWithUrls.length === 0) {
+          console.warn("[IntegratedStreamProcessor] No YouTube formats have direct URLs - they may require signature decoding");
+          console.warn("[IntegratedStreamProcessor] Falling back to DASH manifest if available");
+          
+          // Try to use DASH manifest instead
+          if (video.dashManifestUrl) {
+            console.log("[IntegratedStreamProcessor] Using DASH manifest as fallback:", video.dashManifestUrl);
+            return await this.handleStreamingProtocol({
+              ...video,
+              type: 'dash',
+              url: video.dashManifestUrl
+            }, options);
+          }
+          
+          console.error("[IntegratedStreamProcessor] No DASH manifest available, downloading page URL as fallback");
+          return await this.downloadManifestFallback(video, options);
+        }
+        
+        // Find best video format based on requested quality
+        const requestedHeight = options.quality?.height || 1080;
+        
+        // Filter video-only formats
+        const videoFormats = video.formats.filter(f => f.hasVideo && !f.hasAudio);
+        // Filter audio-only formats
+        const audioFormats = video.formats.filter(f => f.hasAudio && !f.hasVideo);
+        
+        console.log("[IntegratedStreamProcessor] Video formats:", videoFormats.length, "Audio formats:", audioFormats.length);
+        
+        // Find best matching video quality
+        let selectedVideo = videoFormats.find(f => f.height === requestedHeight);
+        if (!selectedVideo) {
+          // Find closest quality
+          selectedVideo = videoFormats.reduce((prev, curr) => {
+            if (!prev) return curr;
+            const prevDiff = Math.abs(prev.height - requestedHeight);
+            const currDiff = Math.abs(curr.height - requestedHeight);
+            return currDiff < prevDiff ? curr : prev;
+          }, null);
+        }
+        
+        // Find best audio
+        const selectedAudio = audioFormats.reduce((prev, curr) => {
+          if (!prev) return curr;
+          return (curr.bitrate || 0) > (prev.bitrate || 0) ? curr : prev;
+        }, null);
+        
+        if (!selectedVideo || !selectedAudio) {
+          console.error("[IntegratedStreamProcessor] Could not find suitable video/audio formats");
+          return await this.downloadManifestFallback(video, options);
+        }
+        
+        // Validate URLs exist
+        if (!selectedVideo.url || !selectedAudio.url) {
+          console.error("[IntegratedStreamProcessor] Video or audio URL is missing!");
+          console.error("[IntegratedStreamProcessor] Video format:", selectedVideo);
+          console.error("[IntegratedStreamProcessor] Audio format:", selectedAudio);
+          console.error("[IntegratedStreamProcessor] All formats:", video.formats);
+          return await this.downloadManifestFallback(video, options);
+        }
+        
+        console.log("[IntegratedStreamProcessor] Selected video:", selectedVideo.qualityLabel, selectedVideo.url?.substring(0, 50));
+        console.log("[IntegratedStreamProcessor] Selected audio:", selectedAudio.mimeType, selectedAudio.url?.substring(0, 50));
+        
+        // Download video and audio separately
+        const videoFilename = `${video.title || 'youtube_video'}_${selectedVideo.qualityLabel || requestedHeight}p_video_${Date.now()}.${selectedVideo.mimeType?.includes('webm') ? 'webm' : 'mp4'}`;
+        const audioFilename = `${video.title || 'youtube_video'}_audio_${Date.now()}.${selectedAudio.mimeType?.includes('webm') ? 'webm' : 'm4a'}`;
+        
+        const videoDownloadId = await chrome.downloads.download({
+          url: selectedVideo.url,
+          filename: videoFilename,
+          saveAs: false
+        });
+        
+        const audioDownloadId = await chrome.downloads.download({
+          url: selectedAudio.url,
+          filename: audioFilename,
+          saveAs: false
+        });
+        
+        console.log("[IntegratedStreamProcessor] YouTube downloads started:", videoDownloadId, audioDownloadId);
+        
+        return {
+          success: true,
+          downloadIds: [videoDownloadId, audioDownloadId],
+          message: `Downloading ${selectedVideo.qualityLabel} video + audio separately`,
+          segmentCount: 2
+        };
+      }
+      
+      // YouTube DASH manifest
+      if (video.type === "youtube-dash" && video.url) {
+        console.log("[IntegratedStreamProcessor] YouTube DASH manifest, using standard DASH processor");
+        return await this.handleStreamingProtocol({...video, type: 'dash'}, options);
+      }
+      
+      // YouTube HLS (live streaming)
+      if (video.type === "youtube-hls" && video.url) {
+        console.log("[IntegratedStreamProcessor] YouTube HLS manifest, using standard HLS processor");
+        return await this.handleStreamingProtocol({...video, type: 'hls'}, options);
+      }
+      
+      // Fallback
+      console.warn("[IntegratedStreamProcessor] YouTube video type not handled, using fallback");
+      return await this.downloadManifestFallback(video, options);
+      
+    } catch (error) {
+      console.error("[IntegratedStreamProcessor] YouTube handling error:", error);
       return await this.downloadManifestFallback(video, options);
     }
   }
@@ -1610,8 +1743,8 @@ pause
     speed = null,
   ) {
     try {
-      chrome.runtime
-        .sendMessage({
+      chrome.runtime.sendMessage(
+        {
           action: "downloadProgress",
           data: {
             show: true,
@@ -1619,32 +1752,44 @@ pause
             text: text,
             detail: detail,
             size: size || "",
-            speed: speed || "", // Add speed to progress data
-            videoUrl: videoUrl || this.currentVideoUrl, // Use provided or current
+            speed: speed || "",
+            videoUrl: videoUrl || this.currentVideoUrl,
             downloadId: downloadId,
             paused: paused,
           },
-        })
-        .catch(() => {}); // Ignore errors if popup is closed
+        },
+        () => {
+          // Check for errors to prevent "Unchecked runtime.lastError" warning
+          if (chrome.runtime.lastError) {
+            // Silently ignore - popup may be closed
+          }
+        }
+      );
     } catch (error) {
-      // Ignore errors
+      // Ignore errors if extension context is invalid
     }
   }
 
   // Hide progress bar
   hideProgress(videoUrl) {
     try {
-      chrome.runtime
-        .sendMessage({
+      chrome.runtime.sendMessage(
+        {
           action: "downloadProgress",
           data: {
             show: false,
             videoUrl: videoUrl || this.currentVideoUrl,
           },
-        })
-        .catch(() => {});
+        },
+        () => {
+          // Check for errors to prevent "Unchecked runtime.lastError" warning
+          if (chrome.runtime.lastError) {
+            // Silently ignore - popup may be closed
+          }
+        }
+      );
     } catch (error) {
-      // Ignore errors
+      // Ignore errors if extension context is invalid
     }
   }
 
@@ -1777,6 +1922,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!tabId) {
           console.error("[Background-Simple] No tab ID available");
           sendResponse({ success: false, error: "No tab ID" });
+          return;
+        }
+
+        // Handle YouTube videos specially
+        if (message.type?.startsWith('youtube')) {
+          console.log("[Background-Simple] YouTube video detected:", message.type);
+          
+          const videoInfo = message.videoInfo || {};
+          const key = `${tabId}_${message.url}`;
+          const alreadyExists = detectedVideos.has(key);
+          
+          if (!alreadyExists) {
+            detectedVideos.set(key, {
+              url: message.url,
+              tabId: tabId,
+              type: message.type,
+              timestamp: Date.now(),
+              source: 'youtube',
+              duration: videoInfo.duration || null,
+              title: videoInfo.title || 'YouTube Video',
+              videoId: videoInfo.id || null,
+              isLive: videoInfo.isLive || false,
+              formats: videoInfo.formats || [],
+              dashManifestUrl: videoInfo.dashManifestUrl || null,
+              hlsManifestUrl: videoInfo.hlsManifestUrl || null
+            });
+            
+            console.log("[Background-Simple] YouTube video stored with key:", key);
+            console.log("[Background-Simple] Formats count:", videoInfo.formats?.length || 0);
+            console.log("[Background-Simple] DASH manifest:", !!videoInfo.dashManifestUrl);
+            console.log("[Background-Simple] HLS manifest:", !!videoInfo.hlsManifestUrl);
+            updateBadge(tabId);
+          }
+          
+          sendResponse({ success: true });
           return;
         }
 
@@ -2142,6 +2322,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         );
         console.log("[Background-Simple] Download options:", message.options);
         console.log("[Background-Simple] Tab ID from message:", message.tabId);
+        console.log("[Background-Simple] Video type:", message.video?.type);
+        console.log("[Background-Simple] Video formats count:", message.video?.formats?.length || 0);
+        console.log("[Background-Simple] Video dashManifestUrl:", !!message.video?.dashManifestUrl);
 
         try {
           const video = message.video;
@@ -2153,7 +2336,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (
             video.type === "dash" ||
             video.type === "mpd" ||
-            video.type === "hls"
+            video.type === "hls" ||
+            video.type?.startsWith("youtube")
           ) {
             console.log(
               "[Background-Simple] Using IntegratedStreamProcessor for streaming content...",

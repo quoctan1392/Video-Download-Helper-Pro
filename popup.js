@@ -65,6 +65,98 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (message && message.action === "downloadProgress") {
       updateVideoProgress(message.data);
     }
+    
+    if (message && message.action === "mseLoadingFullVideo") {
+      console.log('[Popup] MSE loading full video:', message.status);
+      if (message.status === 'started') {
+        updateVideoProgress({
+          videoUrl: message.videoUrl,
+          show: true,
+          percent: 0,
+          text: '🚀 Loading full video...',
+          detail: 'Forcing YouTube to load all segments'
+        });
+      } else if (message.status === 'completed') {
+        updateVideoProgress({
+          videoUrl: message.videoUrl,
+          show: true,
+          percent: 50,
+          text: '✅ Full video loaded!',
+          detail: 'Now merging chunks...'
+        });
+      }
+    }
+    
+    if (message && message.action === "mseLoadProgress") {
+      console.log('[Popup] MSE load progress:', message.progress.toFixed(1), '%');
+      
+      // Calculate size and speed based on chunks loaded
+      const totalChunks = message.currentSegment || 0;
+      const estimatedSize = totalChunks * 500000; // Rough estimate: 500KB per segment
+      const progressPercent = Math.round(message.progress * 0.4); // 0-40% for loading phase
+      
+      updateVideoProgress({
+        videoUrl: message.videoUrl,
+        show: true,
+        percent: progressPercent,
+        text: `Loading video segments...`,
+        detail: `${message.currentSegment}/${message.totalSegments} segments`,
+        size: formatFileSize(estimatedSize)
+      });
+    }
+    
+    if (message && message.action === "mseDownloadSuccess") {
+      console.log('[Popup] MSE download success!');
+      const totalSize = (message.data?.videoSize || 0) + (message.data?.audioSize || 0);
+      const chunks = (message.data?.videoChunks || 0) + (message.data?.audioChunks || 0);
+      
+      updateVideoProgress({
+        videoUrl: message.videoUrl,
+        show: true,
+        percent: 100,
+        text: `✅ Downloaded!`,
+        detail: `${chunks} chunks captured`,
+        size: formatFileSize(totalSize)
+      });
+      
+      // Mark video as downloaded and update UI
+      const video = currentVideos.find((v) => v.url === message.videoUrl);
+      if (video) {
+        video.downloaded = true;
+        // Note: downloadId not available for MSE downloads (no chrome.downloads API)
+        saveVideosToStorage();
+      }
+      
+      // Hide progress after 2 seconds and update UI to show downloaded badge
+      setTimeout(() => {
+        updateVideoProgress({
+          videoUrl: message.videoUrl,
+          show: false
+        });
+        
+        // Add downloaded badge to video item
+        const videoItem = document.querySelector(`.video-item[data-url="${CSS.escape(message.videoUrl)}"]`);
+        if (videoItem) {
+          const videoHeader = videoItem.querySelector('.video-item-header');
+          if (videoHeader && !videoHeader.querySelector('.video-badge.downloaded')) {
+            const badge = document.createElement('span');
+            badge.className = 'video-badge downloaded';
+            badge.textContent = '✓ Downloaded';
+            const ref = videoHeader.querySelector('.video-duration');
+            videoHeader.insertBefore(badge, ref);
+          }
+        }
+      }, 2000);
+    }
+    
+    if (message && message.action === "mseDownloadError") {
+      console.error('[Popup] MSE download error:', message.error);
+      updateVideoProgress({
+        videoUrl: message.videoUrl,
+        show: false
+      });
+      showNotification('❌ MSE download failed: ' + message.error, 'error');
+    }
   });
 
   // Get current tab
@@ -1264,24 +1356,30 @@ async function displayVideos() {
 // Generate HTML for a single video item
 function generateVideoItemHTML(video, index) {
   const isStreaming =
-    video.type === "dash" || video.type === "hls" || video.type === "mpd";
+    video.type === "dash" || video.type === "hls" || video.type === "mpd" ||
+    video.type?.startsWith("youtube");
   const duration = video.duration ? formatDuration(video.duration) : null;
   const size = video.estimatedSize || video.contentLength;
   const isExact = video.isExactSize;
+  
+  // Get display title - use YouTube title if available
+  const displayTitle = video.title || truncateUrl(video.url, 60);
+  const isYouTube = video.type?.startsWith("youtube");
 
   return `
     <div class="video-item" data-index="${index}" data-url="${escapeHtml(video.url)}">
       <div class="video-item-header">
         <span class="video-type ${video.type}">${video.type || "video"}</span>
         ${video.downloaded ? '<span class="video-badge downloaded">✓ Downloaded</span>' : ""}
+        ${video.isLive ? '<span class="video-badge live">🔴 LIVE</span>' : ""}
         ${duration ? `<span class="video-duration">⏱️ ${duration}</span>` : ""}
         <div style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
           ${isStreaming ? '<span class="video-badge streaming">🔗 Streaming</span>' : ""}
           ${size ? `<span class="video-size" title="${isExact ? "Dung lượng chính xác" : "Dung lượng ước tính"}">${isExact ? "✅ " : ""}${formatFileSize(size)}</span>` : ""}
         </div>
       </div>
-      <div class="video-url" title="${escapeHtml(video.url)}">
-        ${escapeHtml(truncateUrl(video.url, 60))}
+      <div class="video-url" title="${escapeHtml(isYouTube ? video.title || video.url : video.url)}">
+        ${isYouTube && video.title ? '📹 ' : ''}${escapeHtml(displayTitle)}
       </div>
       <div class="video-actions">
         ${
@@ -1705,13 +1803,87 @@ function attachVideoEventListenersForItem(videoItem) {
   // Add click handlers for download buttons
   const downloadBtns = videoItem.querySelectorAll(".download-btn");
   downloadBtns.forEach((btn, btnIndex) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
 
       const url = btn.getAttribute("data-url");
       const index = parseInt(btn.getAttribute("data-index"));
       const video = currentVideos.find((v) => v.url === url);
+      
+      // Check if this is a YouTube video - use MSE download
+      const isYouTube = video?.type?.startsWith('youtube');
+      
+      if (isYouTube) {
+        // Use MSE download for YouTube
+        console.log('[Popup] YouTube video detected, using MSE download');
+        
+        // Check if already downloading
+        if (downloadStates.has(url) && downloadStates.get(url).downloading) {
+          console.log('[Popup] This video is already downloading');
+          return;
+        }
+        
+        // Disable button during download
+        btn.disabled = true;
+        const originalText = btn.querySelector('.btn-text').textContent;
+        btn.querySelector('.btn-text').textContent = 'Preparing...';
+        
+        // Show initial progress
+        updateVideoProgress({
+          videoUrl: url,
+          show: true,
+          percent: 0,
+          text: 'Initializing MSE capture...',
+          detail: 'Starting download'
+        });
+        
+        try {
+          // Get current active tab
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          
+          if (!tab || !tab.id) {
+            throw new Error('No active tab found');
+          }
+          
+          // Send message to content script to trigger MSE download
+          console.log('[Popup] Sending downloadMseChunks to tab', tab.id, 'for video:', url);
+          
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            action: 'downloadMseChunks',
+            videoUrl: url
+          });
+          
+          console.log('[Popup] MSE download response:', response);
+          
+          if (response && response.success) {
+            // Success will be shown by progress updates
+            console.log('[Popup] MSE download initiated successfully');
+          } else {
+            throw new Error(response?.error || 'MSE download failed');
+          }
+          
+        } catch (error) {
+          console.error('[Popup] MSE download error:', error);
+          
+          // Hide progress and restore button
+          updateVideoProgress({
+            videoUrl: url,
+            show: false
+          });
+          
+          btn.querySelector('.btn-text').textContent = '✗ Failed';
+          showNotification('MSE download failed: ' + error.message, 'error');
+          
+          setTimeout(() => {
+            btn.querySelector('.btn-text').textContent = originalText;
+            btn.disabled = false;
+          }, 3000);
+        }
+        
+        return; // Exit early for YouTube
+      }
 
+      // Regular download for non-YouTube videos
       // Check if this specific video is already downloading
       if (downloadStates.has(url) && downloadStates.get(url).downloading) {
         console.log("[Popup] This video is already downloading");
@@ -1871,7 +2043,8 @@ async function downloadVideoWithQuality(video, quality) {
 
   try {
     const isStreaming =
-      video.type === "dash" || video.type === "hls" || video.type === "mpd";
+      video.type === "dash" || video.type === "hls" || video.type === "mpd" ||
+      video.type?.startsWith("youtube");
     addLog(
       "info",
       "Popup",
@@ -2116,6 +2289,14 @@ async function clearVideos() {
 function updateStatus(message, icon = "🔍") {
   document.getElementById("statusText").textContent = message;
   document.querySelector(".status-icon").textContent = icon;
+}
+
+// Show notification (for MSE progress updates)
+function showNotification(message, type = 'info') {
+  console.log(`[Popup] Notification [${type}]:`, message);
+  // Update status bar with the notification
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '🔄';
+  updateStatus(message, icon);
 }
 
 // Utility functions

@@ -5,11 +5,13 @@ Chrome extension để tải video từ các trang web với hỗ trợ đầy �
 ## 🎯 Tính năng
 
 - ✅ **Phát hiện video tự động** - Tự động phát hiện các video trên trang web
+- ✅ **Hỗ trợ YouTube** - Phát hiện và download video YouTube với DASH/HLS (xem [YOUTUBE_SUPPORT.md](YOUTUBE_SUPPORT.md))
 - ✅ **Hỗ trợ nhiều định dạng**:
   - MP4, WebM, MKV, AVI, MOV, FLV, WMV
   - DASH (Dynamic Adaptive Streaming over HTTP)
   - HLS (HTTP Live Streaming) - M3U8
   - MPD (Media Presentation Description)
+  - YouTube DASH/HLS/Adaptive formats
 - ✅ **Live Streaming** - Hỗ trợ phát hiện và tải live streams
 - ✅ **High Definition** - Hỗ trợ video chất lượng cao (4K, 8K)
 - ✅ **Giao diện thân thiện** - UI đẹp mắt, dễ sử dụng

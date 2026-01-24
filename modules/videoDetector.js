@@ -17,7 +17,11 @@ export class VideoDetector {
       { pattern: /cloudflarestream\.com.*\/manifest\/video\.m3u8/i, type: 'hls' },
       { pattern: /videodelivery\.net.*\/manifest\/video\.m3u8/i, type: 'hls' },
       { pattern: /cloudflarestream\.com.*\.m3u8/i, type: 'hls' },
-      { pattern: /videodelivery\.net.*\.m3u8/i, type: 'hls' }
+      { pattern: /videodelivery\.net.*\.m3u8/i, type: 'hls' },
+      // YouTube patterns
+      { pattern: /youtube\.com\/api\/manifest\/dash/i, type: 'youtube-dash' },
+      { pattern: /googlevideo\.com.*\/videoplayback/i, type: 'youtube' },
+      { pattern: /youtube\.com.*mime=video/i, type: 'youtube' }
     ];
     
     this.cloudflareStreamDomains = [
@@ -25,11 +29,29 @@ export class VideoDetector {
       'videodelivery.net',
       'customer-', // Cloudflare custom domains
     ];
+    
+    this.youtubeDomains = [
+      'youtube.com',
+      'youtu.be',
+      'googlevideo.com',
+      'm.youtube.com',
+      'youtube-nocookie.com'
+    ];
   }
   
   isVideoUrl(url) {
     try {
       const urlLower = url.toLowerCase();
+      
+      // Check for YouTube videos
+      if (this.isYouTube(url)) {
+        // YouTube video playback URLs or manifest URLs
+        if (urlLower.includes('videoplayback') || 
+            urlLower.includes('/api/manifest/') ||
+            urlLower.includes('mime=video')) {
+          return true;
+        }
+      }
       
       // Check for Cloudflare Stream first
       if (this.isCloudflareStream(url)) {
@@ -71,8 +93,24 @@ export class VideoDetector {
     return this.cloudflareStreamDomains.some(domain => urlLower.includes(domain));
   }
   
+  isYouTube(url) {
+    const urlLower = url.toLowerCase();
+    return this.youtubeDomains.some(domain => urlLower.includes(domain));
+  }
+  
   getVideoType(url) {
     const urlLower = url.toLowerCase();
+    
+    // Check if YouTube
+    if (this.isYouTube(url)) {
+      if (urlLower.includes('/api/manifest/dash')) {
+        return 'youtube-dash';
+      }
+      if (urlLower.includes('videoplayback')) {
+        return 'youtube';
+      }
+      return 'youtube';
+    }
     
     // Check if Cloudflare Stream
     if (this.isCloudflareStream(url)) {
