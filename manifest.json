@@ -44,7 +44,15 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["injected.js", "modules/*.js"],
+      "resources": [
+        "injected.js",
+        "injected/*.js",
+        "injected/core/*.js",
+        "injected/detectors/*.js",
+        "injected/downloaders/*.js",
+        "injected/utils/*.js",
+        "modules/*.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

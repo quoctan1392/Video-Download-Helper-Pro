@@ -40,26 +40,62 @@
   console.log('[Content] Hostname:', window.location.hostname);
   console.log('[Content] ===================================');
   
-  // Inject script to access page context
-  const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('injected.js');
-  script.onload = function() {
-    console.log('[Content] ✅ Injected script loaded and executed successfully');
-    this.remove();
-  };
-  script.onerror = function(err) {
-    console.error('[Content] ❌ Failed to load injected script:', err);
-    console.error('[Content] Script URL:', script.src);
-  };
+  // Inject scripts in order: utils → core → detectors → downloaders → index
+  const scriptsToInject = [
+    // Utils
+    'injected/utils/logger.js',
+    'injected/utils/format-detector.js',
+    'injected/utils/manifest-parser.js',
+    
+    // Core
+    'injected/core/message-bus.js',
+    'injected/core/interceptors.js',
+    'injected/core/detector-base.js',
+    
+    // Detectors
+    'injected/detectors/dash-detector.js',
+    'injected/detectors/hls-detector.js',
+    'injected/detectors/mpd-detector.js',
+    'injected/detectors/youtube-detector.js',
+    
+    // Downloaders
+    'injected/downloaders/mse-downloader.js',
+    
+    // Entry point
+    'injected/index.js'
+  ];
   
-  console.log('[Content] 📝 Attempting to inject script:', script.src);
-  const target = document.head || document.documentElement;
-  if (target) {
-    target.appendChild(script);
-    console.log('[Content] ✅ Script element appended to:', target.tagName);
-  } else {
-    console.error('[Content] ❌ No valid injection target found!');
+  let loadedCount = 0;
+  
+  function injectNextScript() {
+    if (loadedCount >= scriptsToInject.length) {
+      console.log('[Content] ✅ All injected scripts loaded successfully');
+      return;
+    }
+    
+    const scriptPath = scriptsToInject[loadedCount];
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL(scriptPath);
+    
+    script.onload = function() {
+      console.log(`[Content] ✅ Loaded: ${scriptPath}`);
+      loadedCount++;
+      this.remove();
+      injectNextScript();
+    };
+    
+    script.onerror = function(err) {
+      console.error(`[Content] ❌ Failed to load: ${scriptPath}`, err);
+      loadedCount++;
+      this.remove();
+      injectNextScript(); // Continue even if one script fails
+    };
+    
+    (document.head || document.documentElement).appendChild(script);
   }
+  
+  // Start injection
+  injectNextScript();
   
   // Listen for messages from injected script
   window.addEventListener('message', function(event) {
