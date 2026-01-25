@@ -357,6 +357,12 @@ body {
   border: none;
   position: relative;
   overflow: hidden; /* clip animated border to the item's box */
+  /* Make card layout stable across widths: vertical flex so height doesn't stretch
+     unexpectedly when the parent grid changes column widths. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: start; /* prevent grid/flex container from stretching cards vertically */
 }
 
 .video-item::before {
@@ -564,6 +570,12 @@ body {
   align-items: center;
   position: relative;
   z-index: 10;
+}
+
+/* Ensure actions remain at the bottom of a video card so card height
+   doesn't grow when width increases; pushes actions to bottom in flex layout. */
+.video-item .video-actions {
+  margin-top: auto;
 }
 
 /* Per-Video Download Mode Dropdown */
