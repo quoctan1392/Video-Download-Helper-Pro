@@ -92,7 +92,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, rgb(255, 255, 196) 0%, rgb(255, 97, 100) 50%, rgb(176, 0, 18) 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(255, 255, 196) 0%,
+    rgb(255, 97, 100) 50%,
+    rgb(176, 0, 18) 100%
+  );
   color: var(--md-sys-color-on-primary);
   padding: 12px 16px;
   box-shadow: var(--md-sys-elevation-2);
@@ -127,6 +132,23 @@ body {
   letter-spacing: 0;
 }
 
+/* Gradient title style used in popup and side panel */
+.title-gradient {
+  display: inline-block;
+  background-image: linear-gradient(
+    90deg,
+    rgb(59, 0, 0) 0%,
+    rgb(0, 0, 30) 50%,
+    rgb(8, 91, 99) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-weight: 600;
+  font-size: medium;
+}
+
 /* Report / Feedback button (lightbulb) in header */
 .report-btn {
   display: inline-flex;
@@ -140,16 +162,18 @@ body {
   border: none;
   text-decoration: none;
   box-shadow: var(--md-sys-elevation-1);
-  transition: transform 0.12s ease, background 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
 }
 .report-btn svg {
   width: 18px;
   height: 18px;
   color: #ffffff;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.15));
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.15));
 }
 .report-btn:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   transform: translateY(-1px);
 }
 .report-btn:active {
@@ -169,10 +193,19 @@ body {
   border: none;
   margin-right: 8px;
   box-shadow: var(--md-sys-elevation-1);
-  transition: transform 0.12s ease, background 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
 }
-.donation-btn svg { color: #fff; width:18px; height:18px }
-.donation-btn:hover { background: rgba(255,255,255,0.06); transform: translateY(-1px) }
+.donation-btn svg {
+  color: #fff;
+  width: 18px;
+  height: 18px;
+}
+.donation-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
 
 /* Donation screen overlay */
 .donation-screen {
@@ -186,17 +219,66 @@ body {
   gap: 8px;
   overflow-y: auto;
 }
-.donation-screen.active { display: flex }
-.donation-header { display:flex; align-items:center; gap:12px }
-.donation-header h3 { font-size:16px; margin:0; flex:1 }
-.donation-back-btn { background:none; border:none; font-size:16px; cursor:pointer }
-.donation-tabs { display:flex; gap:8px; margin-top:8px }
-.donation-tab { padding:8px 12px; border-radius:12px; border:1px solid var(--md-sys-color-outline); background:var(--md-sys-color-surface); cursor:pointer }
-.donation-tab.active { background: linear-gradient(135deg,var(--gradient-start),var(--gradient-end)); color:var(--md-sys-color-on-primary); border-color:transparent }
-.donation-content { padding:12px 4px }
-.donation-qr { display:flex; align-items:center; justify-content:center; padding:12px; }
-.donation-qr img { max-width:220px; width:100%; height:auto; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.12) }
-.donation-panel p { margin:6px 0; color:var(--md-sys-color-on-surface-variant) }
+.donation-screen.active {
+  display: flex;
+}
+.donation-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.donation-header h3 {
+  font-size: 16px;
+  margin: 0;
+  flex: 1;
+}
+.donation-back-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+.donation-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.donation-tab {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface);
+  cursor: pointer;
+}
+.donation-tab.active {
+  background: linear-gradient(
+    135deg,
+    var(--gradient-start),
+    var(--gradient-end)
+  );
+  color: var(--md-sys-color-on-primary);
+  border-color: transparent;
+}
+.donation-content {
+  padding: 12px 4px;
+}
+.donation-qr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.donation-qr img {
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+.donation-panel p {
+  margin: 6px 0;
+  color: var(--md-sys-color-on-surface-variant);
+}
 
 .donation-message {
   margin-top: 12px;
@@ -204,12 +286,17 @@ body {
   color: var(--md-sys-color-on-surface-variant);
   text-align: center;
   padding: 8px 10px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), transparent);
   border-radius: 8px;
 }
 
 /* Header actions wrapper to align buttons to right */
-.header-actions { display:flex; gap:8px; align-items:center; margin-left:auto }
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
 
 /* Status bar with Material Design 3 styling */
 .status {
@@ -407,13 +494,30 @@ body {
   position: absolute;
   inset: calc(-1 * var(--animated-border-width));
   z-index: 0;
-  border-radius: calc(var(--border-radius-active) + var(--animated-border-width));
+  border-radius: calc(
+    var(--border-radius-active) + var(--animated-border-width)
+  );
   /* Use provided gradient colors (with webkit fallback) */
-  background: #8A2387; /* fallback for old browsers */
-  background: -webkit-linear-gradient(to right, #F27121, #E94057, #8A2387, #FFFFFF); /* Chrome 10-25, Safari 5.1-6 */
-  background: linear-gradient(to right, #F27121, #E94057, #8A2387, #FFFFFF); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+  background: #8a2387; /* fallback for old browsers */
+  background: -webkit-linear-gradient(
+    to right,
+    #f27121,
+    #e94057,
+    #8a2387,
+    #ffffff
+  ); /* Chrome 10-25, Safari 5.1-6 */
+  background: linear-gradient(
+    to right,
+    #f27121,
+    #e94057,
+    #8a2387,
+    #ffffff
+  ); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
   opacity: 0;
-  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+  transition:
+    opacity 220ms ease,
+    filter 220ms ease,
+    transform 220ms ease;
   pointer-events: none;
   filter: blur(0.6px);
   transform-origin: center;
@@ -439,8 +543,12 @@ body {
 }
 
 @keyframes gradient-rotate {
-  from { transform: rotate(0deg) scaleY(var(--animated-border-scale-y)); }
-  to { transform: rotate(360deg) scaleY(var(--animated-border-scale-y)); }
+  from {
+    transform: rotate(0deg) scaleY(var(--animated-border-scale-y));
+  }
+  to {
+    transform: rotate(360deg) scaleY(var(--animated-border-scale-y));
+  }
 }
 
 .video-item:hover::before {
@@ -504,7 +612,16 @@ body {
 }
 
 .video-badge.streaming {
-  background: linear-gradient(90deg, rgb(68, 202, 255) 0%, rgb(113, 141, 255) 16.667%, rgb(168, 86, 244) 33.333%, rgb(223, 50, 198) 50%, rgb(255, 40, 148) 66.667%, rgb(255, 59, 100) 83.333%, rgb(255, 102, 63) 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(68, 202, 255) 0%,
+    rgb(113, 141, 255) 16.667%,
+    rgb(168, 86, 244) 33.333%,
+    rgb(223, 50, 198) 50%,
+    rgb(255, 40, 148) 66.667%,
+    rgb(255, 59, 100) 83.333%,
+    rgb(255, 102, 63) 100%
+  );
   color: white;
 }
 
@@ -512,7 +629,16 @@ body {
 .video-type.youtube,
 .badge.youtube,
 .video-badge.youtube {
-  background: linear-gradient(270deg, rgb(46, 69, 14) 0%, rgb(86, 39, 23) 16.667%, rgb(126, 22, 28) 33.333%, rgb(165, 19, 13) 50%, rgb(204, 30, 23) 66.667%, rgb(241, 53, 28) 83.333%, rgb(255, 90, 13) 100%);
+  background: linear-gradient(
+    270deg,
+    rgb(46, 69, 14) 0%,
+    rgb(86, 39, 23) 16.667%,
+    rgb(126, 22, 28) 33.333%,
+    rgb(165, 19, 13) 50%,
+    rgb(204, 30, 23) 66.667%,
+    rgb(241, 53, 28) 83.333%,
+    rgb(255, 90, 13) 100%
+  );
   color: white;
 }
 
@@ -708,7 +834,7 @@ body {
 .mode-note {
   font-size: 11px;
   color: var(--md-sys-color-on-surface-variant);
-  background: rgba(0,0,0,0.04);
+  background: rgba(0, 0, 0, 0.04);
   padding: 2px 6px;
   border-radius: 8px;
   margin-left: 8px;
