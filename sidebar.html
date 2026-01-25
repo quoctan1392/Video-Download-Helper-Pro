@@ -3,8 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Download Helper Pro</title>
+  <title>Video Download Helper - Side Panel</title>
   <link rel="stylesheet" href="popup.css">
+  <style>
+    /* Sidebar-specific responsive styles */
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+    
+    body {
+      min-width: 300px; /* Minimum width for sidebar */
+    }
+    
+    /* Make container responsive */
+    .container {
+      width: 100% !important;
+      max-width: none !important;
+      min-width: 300px;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+    
+    /* Responsive header */
+    .header h1 {
+      font-size: clamp(14px, 3vw, 18px);
+      flex-wrap: wrap;
+    }
+    
+    .header-actions {
+      gap: 4px;
+    }
+    
+    /* Hide sidebar button in sidebar itself */
+    #openSidebarBtn {
+      display: none !important;
+    }
+    
+    /* Responsive video cards */
+    .video-card {
+      min-width: 280px;
+    }
+    
+    /* Responsive grid for wider sidebars */
+    @media (min-width: 600px) {
+      .video-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+      }
+      
+      .video-card {
+        margin-bottom: 0 !important;
+      }
+    }
+    
+    /* Extra wide sidebar - 3 columns */
+    @media (min-width: 900px) {
+      .video-list {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      }
+    }
+    
+    /* Responsive footer buttons */
+    @media (max-width: 400px) {
+      .footer {
+        flex-wrap: wrap;
+      }
+      
+      .btn {
+        font-size: 11px;
+        padding: 6px 10px;
+      }
+    }
+    
+    /* Responsive quality selector */
+    .quality-selector {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    
+    .quality-selector::-webkit-scrollbar {
+      height: 4px;
+    }
+    
+    .quality-selector::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 2px;
+    }
+    
+    /* Ensure modals work well in sidebar */
+    .modal {
+      position: fixed;
+      left: 0;
+      right: 0;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -174,29 +269,29 @@
     </div>
   </div>
   
-      <!-- Donation Screen -->
-      <div id="donationScreen" class="donation-screen" aria-hidden="true">
-        <div class="donation-header">
-          <button id="donationBackBtn" class="donation-back-btn" title="Back">←</button>
-          <h3>Donation</h3>
-        </div>
-        <div class="donation-tabs">
-          <button class="donation-tab" data-tab="bank">Bank (Techcombank)</button>
-          <button class="donation-tab" data-tab="paypal">PayPal</button>
-        </div>
-        <div class="donation-content">
-          <div id="donation-bank" class="donation-panel" style="display:none;">
-            <p>Scan the QR code to transfer to Techcombank</p>
-            <div class="donation-qr"><img src="icons/techcombank.png" alt="Techcombank QR"></div>
-            <p class="donation-message">Any support — big or small — helps me improve and maintain this extension. Thank you for helping it grow!</p>
-          </div>
-          <div id="donation-paypal" class="donation-panel">
-            <p>Scan the QR code to donate via PayPal</p>
-            <div class="donation-qr"><img src="icons/paypal.png" alt="PayPal QR"></div>
-            <p class="donation-message">Any support — big or small — helps me improve and maintain this extension. Thank you for helping it grow!</p>
-          </div>
-        </div>
+  <!-- Donation Screen -->
+  <div id="donationScreen" class="donation-screen" aria-hidden="true">
+    <div class="donation-header">
+      <button id="donationBackBtn" class="donation-back-btn" title="Back">←</button>
+      <h3>Donation</h3>
+    </div>
+    <div class="donation-tabs">
+      <button class="donation-tab" data-tab="bank">Bank (Techcombank)</button>
+      <button class="donation-tab" data-tab="paypal">PayPal</button>
+    </div>
+    <div class="donation-content">
+      <div id="donation-bank" class="donation-panel" style="display:none;">
+        <p>Scan the QR code to transfer to Techcombank</p>
+        <div class="donation-qr"><img src="icons/techcombank.png" alt="Techcombank QR"></div>
+        <p class="donation-message">Any support — big or small — helps me improve and maintain this extension. Thank you for helping it grow!</p>
       </div>
+      <div id="donation-paypal" class="donation-panel">
+        <p>Scan the QR code to donate via PayPal</p>
+        <div class="donation-qr"><img src="icons/paypal.png" alt="PayPal QR"></div>
+        <p class="donation-message">Any support — big or small — helps me improve and maintain this extension. Thank you for helping it grow!</p>
+      </div>
+    </div>
+  </div>
   
   <script src="popup.js"></script>
 </body>

@@ -295,6 +295,63 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (err) {
       console.warn('[Popup] donation init failed', err);
     }
+
+    // Sidebar open button handler
+    try {
+      const openSidebarBtn = document.getElementById('openSidebarBtn');
+      if (openSidebarBtn) {
+        openSidebarBtn.addEventListener('click', async () => {
+          try {
+            // Check if sidePanel API is available
+            if (!chrome.sidePanel) {
+              alert('❌ Side Panel không khả dụng\n\nChrome của bạn chưa hỗ trợ Side Panel API.\nVui lòng cập nhật lên Chrome 114 trở lên.');
+              return;
+            }
+
+            console.log('[Popup] Configuring side panel...');
+            
+            // Configure side panel for current window
+            try {
+              await chrome.sidePanel.setOptions({
+                path: 'sidebar.html',
+                enabled: true
+              });
+              console.log('[Popup] Side panel configured');
+            } catch (err) {
+              console.warn('[Popup] setOptions failed:', err);
+              // Continue anyway
+            }
+
+            // Try to open side panel (this may fail due to user gesture requirement)
+            try {
+              if (chrome.sidePanel.open) {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab && tab.windowId) {
+                  await chrome.sidePanel.open({ windowId: tab.windowId });
+                  console.log('[Popup] Side panel opened');
+                  window.close();
+                  return;
+                }
+              }
+            } catch (err) {
+              console.warn('[Popup] Failed to open side panel programmatically:', err);
+              // This is expected - show instruction instead
+            }
+
+            // If we reach here, show instruction to user
+            const message = `✅ Side Panel đã được cấu hình!\n\n📍 Cách mở Side Panel:\n\n1. Nhìn sang góc trên bên PHẢI của Chrome\n2. Click vào icon Side Panel (⋮⋮ hoặc ▶)\n3. Chọn "Video Download Helper"\n\n💡 Hoặc nhấn tổ hợp phím:\nWindows/Linux: Ctrl+Shift+E\nmacOS: Cmd+Shift+E`;
+            
+            alert(message);
+            
+          } catch (e) {
+            console.error('[Popup] Error configuring side panel:', e);
+            alert('❌ Lỗi khi cấu hình Side Panel\n\n' + (e.message || 'Unknown error'));
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[Popup] openSidebar init failed', err);
+    }
   } catch (err) {
     console.warn("[Popup] report button init failed:", err);
   }

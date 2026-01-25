@@ -24,6 +24,19 @@ chrome.webNavigation.onCommitted.addListener((details) => {
 
 console.log('[Background-Simple] Navigation listener installed');
 
+// Handle keyboard shortcuts
+chrome.commands.onCommand.addListener((command) => {
+  console.log('[Background-Simple] Command received:', command);
+  
+  if (command === 'open-side-panel') {
+    // Note: We can't open side panel programmatically from here due to user gesture requirement
+    // This will be handled by the extension popup or user manually
+    console.log('[Background-Simple] Side panel shortcut triggered - user should open it manually');
+  }
+});
+
+console.log('[Background-Simple] Commands listener installed');
+
 // Update extension badge with video count for a tab
 function updateBadge(tabId) {
   try {

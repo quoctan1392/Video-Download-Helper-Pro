@@ -17,7 +17,8 @@
     "activeTab",
     "scripting",
     "webNavigation",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -40,6 +41,25 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+V",
+        "mac": "Command+Shift+V"
+      },
+      "description": "Open Video Download Helper"
+    },
+    "open-side-panel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Open Side Panel"
     }
   },
   "web_accessible_resources": [
