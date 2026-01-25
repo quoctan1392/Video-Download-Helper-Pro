@@ -250,6 +250,51 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     }
+  
+    // Donation UI init (heart button -> donation screen)
+    try {
+      const donationBtn = document.getElementById('donationBtn');
+      const donationScreen = document.getElementById('donationScreen');
+      const donationBackBtn = document.getElementById('donationBackBtn');
+      const donationTabs = document.querySelectorAll('.donation-tab');
+
+      function switchDonationTab(tab) {
+        donationTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        const bank = document.getElementById('donation-bank');
+        const paypal = document.getElementById('donation-paypal');
+        if (bank) bank.style.display = tab === 'bank' ? 'block' : 'none';
+        if (paypal) paypal.style.display = tab === 'paypal' ? 'block' : 'none';
+      }
+
+      function openDonation() {
+        if (donationScreen) {
+          donationScreen.classList.add('active');
+          donationScreen.setAttribute('aria-hidden','false');
+        }
+      }
+
+      function closeDonation() {
+        if (donationScreen) {
+          donationScreen.classList.remove('active');
+          donationScreen.setAttribute('aria-hidden','true');
+        }
+      }
+
+      donationTabs.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const tab = btn.dataset.tab || 'bank';
+          switchDonationTab(tab);
+        });
+      });
+
+      if (donationBtn) donationBtn.addEventListener('click', (e) => { openDonation(); });
+      if (donationBackBtn) donationBackBtn.addEventListener('click', (e) => { closeDonation(); });
+
+      // default tab: PayPal
+      switchDonationTab('paypal');
+    } catch (err) {
+      console.warn('[Popup] donation init failed', err);
+    }
   } catch (err) {
     console.warn("[Popup] report button init failed:", err);
   }

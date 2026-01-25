@@ -156,6 +156,61 @@ body {
   transform: translateY(0);
 }
 
+/* Donation button in header (heart) */
+.donation-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: white;
+  background: transparent;
+  border: none;
+  margin-right: 8px;
+  box-shadow: var(--md-sys-elevation-1);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.donation-btn svg { color: #fff; width:18px; height:18px }
+.donation-btn:hover { background: rgba(255,255,255,0.06); transform: translateY(-1px) }
+
+/* Donation screen overlay */
+.donation-screen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: var(--md-sys-color-surface);
+  z-index: 300;
+  padding: 12px 16px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+.donation-screen.active { display: flex }
+.donation-header { display:flex; align-items:center; gap:12px }
+.donation-header h3 { font-size:16px; margin:0; flex:1 }
+.donation-back-btn { background:none; border:none; font-size:16px; cursor:pointer }
+.donation-tabs { display:flex; gap:8px; margin-top:8px }
+.donation-tab { padding:8px 12px; border-radius:12px; border:1px solid var(--md-sys-color-outline); background:var(--md-sys-color-surface); cursor:pointer }
+.donation-tab.active { background: linear-gradient(135deg,var(--gradient-start),var(--gradient-end)); color:var(--md-sys-color-on-primary); border-color:transparent }
+.donation-content { padding:12px 4px }
+.donation-qr { display:flex; align-items:center; justify-content:center; padding:12px; }
+.donation-qr img { max-width:220px; width:100%; height:auto; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.12) }
+.donation-panel p { margin:6px 0; color:var(--md-sys-color-on-surface-variant) }
+
+.donation-message {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: center;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+  border-radius: 8px;
+}
+
+/* Header actions wrapper to align buttons to right */
+.header-actions { display:flex; gap:8px; align-items:center; margin-left:auto }
+
 /* Status bar with Material Design 3 styling */
 .status {
   background: var(--md-sys-color-surface);
@@ -301,7 +356,7 @@ body {
   box-shadow: none;
   border: none;
   position: relative;
-  overflow: visible;
+  overflow: hidden; /* clip animated border to the item's box */
 }
 
 .video-item::before {
@@ -329,6 +384,62 @@ body {
 
 .video-item:hover::before {
   opacity: 0.04;
+}
+
+/* Animated gradient border around video-item on hover */
+:root {
+  --animated-border-width: 3px;
+  --animated-border-scale-y: 0.22; /* compress rotating element vertically (0.0 - 1.0) */
+}
+
+.video-item {
+  --border-radius-active: calc(var(--md-sys-shape-corner-small));
+}
+
+.video-item::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--animated-border-width));
+  z-index: 0;
+  border-radius: calc(var(--border-radius-active) + var(--animated-border-width));
+  /* Use provided gradient colors (with webkit fallback) */
+  background: #8A2387; /* fallback for old browsers */
+  background: -webkit-linear-gradient(to right, #F27121, #E94057, #8A2387, #FFFFFF); /* Chrome 10-25, Safari 5.1-6 */
+  background: linear-gradient(to right, #F27121, #E94057, #8A2387, #FFFFFF); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+  opacity: 0;
+  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+  pointer-events: none;
+  filter: blur(0.6px);
+  transform-origin: center;
+  transform: scaleY(var(--animated-border-scale-y));
+}
+
+.video-item::after {
+  /* cover the center so only border is visible */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface);
+  margin: var(--animated-border-width);
+  pointer-events: none;
+}
+
+/* Ensure inner content sits above the pseudo elements */
+.video-item * {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes gradient-rotate {
+  from { transform: rotate(0deg) scaleY(var(--animated-border-scale-y)); }
+  to { transform: rotate(360deg) scaleY(var(--animated-border-scale-y)); }
+}
+
+.video-item:hover::before {
+  opacity: 1;
+  animation: gradient-rotate 3.5s linear infinite;
 }
 
 .video-item:active {
